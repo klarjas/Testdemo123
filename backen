@@ -3728,7 +3728,7 @@ async def write_user_language_api(request: Request):
 
 def _translate_public_text(text: str, target_language: str) -> str:
     source = str(text or "").strip()
-    if not source or len(source) > 500 or not I18N_TRANSLATE_RE.search(source):
+    if not source or len(source) > 1500 or not I18N_TRANSLATE_RE.search(source):
         return source
     cache_key = (target_language, source)
     with I18N_CACHE_LOCK:
@@ -3780,8 +3780,8 @@ async def translate_user_visible_text(request: Request):
         raise HTTPException(status_code=400, detail="texts must be an array with at most 30 items")
     clean_values = []
     for value in values:
-        if not isinstance(value, str) or len(value) > 500:
-            raise HTTPException(status_code=400, detail="Each text must be a string of at most 500 characters")
+        if not isinstance(value, str) or len(value) > 1500:
+            raise HTTPException(status_code=400, detail="Each text must be a string of at most 1500 characters")
         clean_values.append(value)
     with ThreadPoolExecutor(max_workers=5) as pool:
         translated = list(pool.map(lambda item: _translate_public_text(item, target), clean_values))
