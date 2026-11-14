@@ -2406,7 +2406,10 @@
     const batch = Array.from(pendingDynamicNodes.entries()).slice(0, 30);
     batch.forEach(([node]) => pendingDynamicNodes.delete(node));
     const texts = batch.map(([, original]) => original.trim());
-    if (!texts.length) return;
+    if (!texts.length) {
+      dynamicTranslationInFlight = false;
+      return;
+    }
     const sequence = ++dynamicTranslationSequence;
     try {
       const initData = window.Telegram?.WebApp?.initData || "";
