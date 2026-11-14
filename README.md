@@ -11,6 +11,8 @@ A Telegram video-to-Khmer-dubbing bot. The same codebase runs on Windows (Python
 
 No PyTorch, CUDA, local speech model, or GPU is used.
 
+Python 3.13 installs audioop-lts as a compatibility module for pydub because the standard-library audioop module was removed in Python 3.13. Python 3.11 uses its built-in audioop.
+
 ## Requirements
 
 - Python 3.11 or 3.13
