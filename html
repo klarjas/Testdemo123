@@ -974,8 +974,9 @@
 
     .nav-item {
       position: relative;
-      width: 50px;
-      height: 44px;
+      width: auto;
+      min-width: 50px;
+      height: 48px;
       border-radius: 9999px;
       border: 1px solid transparent;
       background: transparent;
@@ -983,12 +984,21 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0;
+      flex-direction: column;
+      gap: 2px;
+      padding: 3px 7px;
       flex-shrink: 0;
       touch-action: manipulation;
       transition: background 0.25s ease, color 0.22s ease, border-color 0.25s ease, transform 0.18s ease;
     }
 
+    .nav-label {
+      display: block;
+      font-size: 9px;
+      line-height: 1.15;
+      font-weight: 600;
+      white-space: nowrap;
+    }
     .nav-item:hover { color: #d4d4d4; }
     .nav-item:active { transform: scale(0.9); }
     .nav-item.active {
@@ -2188,26 +2198,20 @@
 <div class="bottom-fade-mask"></div>
 <nav class="bottom-nav" aria-label="Bottom Navigation">
   <button type="button" class="nav-item side-btn active" id="home-btn" title="ទំព័រដើម" aria-label="ទំព័រដើម">
-    <svg viewBox="0 0 24 24">
-      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"></path>
-    </svg>
+    <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"></path></svg>
+    <span class="nav-label" data-nav-label="home">ទំព័រដើម</span>
   </button>
-  <button type="button" class="nav-item side-btn" id="focus-search" title="ស្វែងរករឿង" aria-label="ស្វែងរករឿង">
-    <svg viewBox="0 0 24 24">
-      <circle cx="11" cy="11" r="7"></circle>
-      <line x1="20" y1="20" x2="16.35" y2="16.35"></line>
-    </svg>
+  <button type="button" class="nav-item side-btn" id="focus-search" title="ស្វែងរក" aria-label="ស្វែងរក">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="20" y1="20" x2="16.35" y2="16.35"></line></svg>
+    <span class="nav-label" data-nav-label="search">ស្វែងរក</span>
   </button>
-  <button type="button" class="nav-item side-btn" id="favorites-btn" title="រឿងរក្សាទុក" aria-label="រឿងរក្សាទុក">
-    <svg viewBox="0 0 24 24">
-      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
-    </svg>
+  <button type="button" class="nav-item side-btn" id="favorites-btn" title="រក្សាទុក" aria-label="រក្សាទុក">
+    <svg viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg>
+    <span class="nav-label" data-nav-label="saved">រក្សាទុក</span>
   </button>
-  <button type="button" class="nav-item side-btn" id="history-btn" title="រឿងធ្លាប់មើល" aria-label="រឿងធ្លាប់មើល">
-    <svg viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="9"></circle>
-      <polyline points="12 7 12 12 15.5 14"></polyline>
-    </svg>
+  <button type="button" class="nav-item side-btn" id="history-btn" title="ប្រវត្តិ" aria-label="ប្រវត្តិ">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>
+    <span class="nav-label" data-nav-label="history">ប្រវត្តិ</span>
   </button>
   <div class="nav-filter-wrap" id="nav-filter-wrap">
     <button type="button" class="nav-item" id="category-filter-toggle" title="ប្រភេទរឿង" aria-label="ប្រភេទរឿង" aria-expanded="false" aria-controls="category-filter-panel">
@@ -2219,6 +2223,7 @@
         <line x1="4" y1="18" x2="20" y2="18"></line>
         <circle cx="10" cy="18" r="2.2"></circle>
       </svg>
+      <span class="nav-label" data-nav-label="filter">តម្រង</span>
     </button>
     <div class="category-filter-panel hidden" id="category-filter-panel">
       <div class="category-filter" id="category-filter" role="group" aria-label="ប្រភេទរឿង"></div>
@@ -2229,6 +2234,11 @@
 <script>
 (() => {
   const LANGUAGE_KEY = "kmovie_ui_language";
+  const NAV_LABELS = {
+    km: {home:"ទំព័រដើម",search:"ស្វែងរក",saved:"រក្សាទុក",history:"ប្រវត្តិ",filter:"តម្រង"},
+    en: {home:"Home",search:"Search",saved:"Saved",history:"History",filter:"Filter"},
+    "zh-CN": {home:"首页",search:"搜索",saved:"收藏",history:"历史记录",filter:"筛选"}
+  };
   const UI_TRANSLATIONS = {
     "ស្វែងរកឈ្មោះរឿង, CODE (XF-000001), ប្រភេទ...": "Search title, CODE (XF-000001), category...",
     "ស្ថិតិ": "Stats",
@@ -2335,18 +2345,33 @@
       node.childNodes.forEach(translateNode);
     }
   };
+  const renderLanguage = () => {
+    document.documentElement.lang = uiLanguage;
+    if (languageButton) languageButton.textContent = uiLanguage === "km" ? "EN" : uiLanguage === "en" ? "中文" : "ខ្មែរ";
+    document.querySelectorAll("[data-nav-label]").forEach(node => {
+      const key = node.getAttribute("data-nav-label");
+      node.textContent = NAV_LABELS[uiLanguage]?.[key] || NAV_LABELS.km[key] || "";
+    });
+    translateNode(document.body);
+  };
   const applyLanguage = () => {
     uiLanguage = uiLanguage === "km" ? "en" : uiLanguage === "en" ? "zh-CN" : "km";
     localStorage.setItem(LANGUAGE_KEY, uiLanguage);
-    document.documentElement.lang = uiLanguage;
-    if (languageButton) languageButton.textContent = uiLanguage === "km" ? "EN" : uiLanguage === "en" ? "中文" : "ខ្មែរ";
-    translateNode(document.body);
+    renderLanguage();
+    window.dispatchEvent(new CustomEvent("xfanster:language-change", {detail:{language:uiLanguage}}));
   };
   if (languageButton) {
     languageButton.textContent = uiLanguage === "km" ? "EN" : uiLanguage === "en" ? "中文" : "ខ្មែរ";
     languageButton.addEventListener("click", applyLanguage);
   }
-  if (uiLanguage !== "km") translateNode(document.body);
+  renderLanguage();
+  window.addEventListener("xfanster:language-from-server", event => {
+    const code = event.detail?.language;
+    if (!["km", "en", "zh-CN"].includes(code)) return;
+    uiLanguage = code;
+    localStorage.setItem(LANGUAGE_KEY, code);
+    renderLanguage();
+  });
   const languageObserver = new MutationObserver(records => {
     if (uiLanguage === "km") return;
     records.forEach(record => {
@@ -2387,6 +2412,30 @@
   };
 
   const API_URL = `${API_BASE}/api/dramas`;
+
+  const telegramInitData = window.Telegram?.WebApp?.initData || "";
+  const languageHeaders = telegramInitData ? {"X-Telegram-Init-Data": telegramInitData} : {};
+  const syncLanguageToServer = async language => {
+    if (!telegramInitData || !["km", "en", "zh-CN"].includes(language)) return;
+    try {
+      await nativeFetch(`${API_BASE}/api/user-language`, {
+        method:"POST", headers:{...languageHeaders,"Content-Type":"application/json"},
+        body:JSON.stringify({language})
+      });
+    } catch (error) { console.warn("Could not sync language preference", error); }
+  };
+  window.addEventListener("xfanster:language-change", event => {
+    syncLanguageToServer(event.detail?.language);
+  });
+  if (telegramInitData) {
+    nativeFetch(`${API_BASE}/api/user-language`, {headers:languageHeaders})
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (data?.language && ["km", "en", "zh-CN"].includes(data.language)) {
+          window.dispatchEvent(new CustomEvent("xfanster:language-from-server", {detail:{language:data.language}}));
+        }
+      }).catch(error => console.warn("Could not load saved language", error));
+  }
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (char) => ({
