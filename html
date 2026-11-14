@@ -2317,13 +2317,22 @@
   const originalAttributes = new WeakMap();
   const translateText = value => {
     const trimmed = value.trim();
-    if (UI_TRANSLATIONS[trimmed]) return value.replace(trimmed, UI_TRANSLATIONS[trimmed]);
-    let match = trimmed.match(/^ទំព័រ (\d+)(?: \/ (\d+))?$/);
-    if (match) return value.replace(trimmed, `Page ${match[1]}${match[2] ? " / " + match[2] : ""}`);
-    match = trimmed.match(/^(\d+) រឿង$/);
-    if (match) return value.replace(trimmed, `${match[1]} dramas`);
-    match = trimmed.match(/^សរុប (\d+) Video$/);
-    if (match) return value.replace(trimmed, `Total ${match[1]} videos`);
+    const dictionary = uiLanguage === "en" ? UI_TRANSLATIONS : ZH_TRANSLATIONS;
+    if (dictionary[trimmed]) return value.replace(trimmed, dictionary[trimmed]);
+    let match = trimmed.match(/^ទំព័រ (\\d+)(?: \/ (\\d+))?$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `第 ${match[1]} / ${match[2] || "?"} 页` : `Page ${match[1]}${match[2] ? " / " + match[2] : ""}`);
+    match = trimmed.match(/^(\\d+) រឿង$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `${match[1]} 部剧集` : `${match[1]} dramas`);
+    match = trimmed.match(/^(\\d+) នាក់$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `${match[1]} 人` : `${match[1]} people`);
+    match = trimmed.match(/^ភាគ (\\d+)$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `第 ${match[1]} 集` : `Episode ${match[1]}`);
+    match = trimmed.match(/^សរុប (\\d+) ភាគ$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `共 ${match[1]} 集` : `${match[1]} episodes`);
+    match = trimmed.match(/^ពេញនិយម (\\d+) រឿង$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `热门剧集 ${match[1]} 部` : `Popular: ${match[1]} dramas`);
+    match = trimmed.match(/^សរុប (\\d+) Video$/);
+    if (match) return value.replace(trimmed, uiLanguage === "zh-CN" ? `共 ${match[1]} 个视频` : `Total ${match[1]} videos`);
     return value;
   };
   const translateNode = node => {
