@@ -2390,12 +2390,18 @@
   const pendingDynamicNodes = new Map();
   let dynamicTranslationTimer = null;
   let dynamicTranslationSequence = 0;
+  let dynamicTranslationInFlight = false;
   const getTranslationApiBase = () => (window.location.origin && window.location.origin.startsWith("http"))
     ? window.location.origin : "https://kmovie-render.onrender.com";
 
   const flushDynamicTranslations = async () => {
     dynamicTranslationTimer = null;
     if (uiLanguage === "km" || !pendingDynamicNodes.size) return;
+    if (dynamicTranslationInFlight) {
+      dynamicTranslationTimer = setTimeout(flushDynamicTranslations, 100);
+      return;
+    }
+    dynamicTranslationInFlight = true;
     const languageAtRequest = uiLanguage;
     const batch = Array.from(pendingDynamicNodes.entries()).slice(0, 30);
     batch.forEach(([node]) => pendingDynamicNodes.delete(node));
@@ -2426,6 +2432,8 @@
       });
     } catch (error) {
       console.warn("Dynamic text translation unavailable", error);
+    } finally {
+      dynamicTranslationInFlight = false;
     }
     if (pendingDynamicNodes.size && !dynamicTranslationTimer) {
       dynamicTranslationTimer = setTimeout(flushDynamicTranslations, 80);
