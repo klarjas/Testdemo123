@@ -317,6 +317,7 @@ def is_internal_key(title: str) -> bool:
     return (
         t == REQ_LIMIT_KEY
         or t == USER_START_KEY
+        or t == USER_LANGUAGE_KEY
         or t.startswith(CAT_STORE_PREFIX)
         or t.startswith(SYN_STORE_PREFIX)
         or t.startswith(FAV_STORE_PREFIX)
@@ -2891,6 +2892,9 @@ def handle_language_menu(message):
 def handle_set_user_language(call):
     uid = call.from_user.id
     code = (call.data or "").split(":", 1)[1]
+    if code not in ("km", "en", "zh-CN"):
+        bot.answer_callback_query(call.id, "Unsupported language", show_alert=True)
+        return
     if set_user_language(uid, code):
         bot.answer_callback_query(call.id, "Language saved")
         bot.send_message(uid, bot_text(uid, "បានប្តូរភាសារួចរាល់។", "Language updated.", "语言已更新。"), reply_markup=get_bottom_menu(uid, has_active_drama=False))
