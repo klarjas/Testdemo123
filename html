@@ -2340,7 +2340,11 @@
       if (!originalTextNodes.has(node)) originalTextNodes.set(node, node.nodeValue);
       const original = originalTextNodes.get(node);
       const translated = uiLanguage === "en" ? translateText(original) : uiLanguage === "zh-CN" ? (ZH_TRANSLATIONS[original.trim()] ? original.replace(original.trim(), ZH_TRANSLATIONS[original.trim()]) : original) : original;
-      if (translated !== node.nodeValue) node.nodeValue = translated;
+      if (translated !== node.nodeValue) {
+        node.nodeValue = translated;
+        translatedTextNodes?.set?.(node, translated);
+      }
+      if (uiLanguage !== "km" && translated === original) queueDynamicTranslation(node, original);
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       let savedAttrs = originalAttributes.get(node);
       if (!savedAttrs) { savedAttrs = {}; originalAttributes.set(node, savedAttrs); }
@@ -2375,7 +2379,6 @@
     languageButton.textContent = uiLanguage === "km" ? "EN" : uiLanguage === "en" ? "中文" : "ខ្មែរ";
     languageButton.addEventListener("click", applyLanguage);
   }
-  renderLanguage();
   window.addEventListener("xfanster:language-from-server", event => {
     const code = event.detail?.language;
     if (!["km", "en", "zh-CN"].includes(code)) return;
@@ -2383,20 +2386,78 @@
     localStorage.setItem(LANGUAGE_KEY, code);
     renderLanguage();
   });
+  const translatedTextNodes = new WeakMap();
+  const pendingDynamicNodes = new Map();
+  let dynamicTranslationTimer = null;
+  let dynamicTranslationSequence = 0;
+  const getTranslationApiBase = () => (window.location.origin && window.location.origin.startsWith("http"))
+    ? window.location.origin : "https://kmovie-render.onrender.com";
+
+  const flushDynamicTranslations = async () => {
+    dynamicTranslationTimer = null;
+    if (uiLanguage === "km" || !pendingDynamicNodes.size) return;
+    const languageAtRequest = uiLanguage;
+    const batch = Array.from(pendingDynamicNodes.entries()).slice(0, 30);
+    batch.forEach(([node]) => pendingDynamicNodes.delete(node));
+    const texts = batch.map(([, original]) => original.trim());
+    if (!texts.length) return;
+    const sequence = ++dynamicTranslationSequence;
+    try {
+      const initData = window.Telegram?.WebApp?.initData || "";
+      if (!initData) return;
+      const response = await fetch(`${getTranslationApiBase()}/api/translate`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json", "X-Telegram-Init-Data":initData},
+        body: JSON.stringify({language:languageAtRequest, texts})
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (sequence > dynamicTranslationSequence || uiLanguage !== languageAtRequest || data.language !== languageAtRequest) return;
+      batch.forEach(([node, original], index) => {
+        const translated = data.translations?.[index];
+        if (!node.isConnected || typeof translated !== "string" || !translated.trim()) return;
+        if (originalTextNodes.get(node) !== original) return;
+        if (node.nodeValue.trim() !== original.trim()) return;
+        const leading = original.match(/^\\s*/)?.[0] || "";
+        const trailing = original.match(/\\s*$/)?.[0] || "";
+        const applied = leading + translated.trim() + trailing;
+        translatedTextNodes.set(node, applied);
+        node.nodeValue = applied;
+      });
+    } catch (error) {
+      console.warn("Dynamic text translation unavailable", error);
+    }
+    if (pendingDynamicNodes.size && !dynamicTranslationTimer) {
+      dynamicTranslationTimer = setTimeout(flushDynamicTranslations, 80);
+    }
+  };
+
+  const queueDynamicTranslation = (node, original) => {
+    if (!node?.isConnected || !original || !/[\\u1780-\\u17FF]/.test(original)) return;
+    if (original.trim().length < 2 || original.trim().length > 500) return;
+    if (uiLanguage === "km") return;
+    if (node.parentElement?.closest("script,style,svg,code,pre,textarea,input,select,option")) return;
+    pendingDynamicNodes.set(node, original);
+    if (!dynamicTranslationTimer) dynamicTranslationTimer = setTimeout(flushDynamicTranslations, 100);
+  };
+
   const languageObserver = new MutationObserver(records => {
     if (uiLanguage === "km") return;
     records.forEach(record => {
       if (record.type === "characterData") {
         const node = record.target;
+        const current = node.nodeValue || "";
+        if (translatedTextNodes.get(node) === current) return;
         if (originalTextNodes.has(node)) {
           const saved = originalTextNodes.get(node);
-          if (node.nodeValue !== translateText(saved)) originalTextNodes.set(node, node.nodeValue);
+          if (current !== translateText(saved) && current !== saved) originalTextNodes.set(node, current);
         }
         translateNode(node);
       } else record.addedNodes.forEach(translateNode);
     });
   });
   languageObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+  renderLanguage();
 })();
 
 (() => {
