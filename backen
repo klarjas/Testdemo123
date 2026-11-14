@@ -72,6 +72,13 @@ EP_COV_STORE_PREFIX = "__EPCOV__"
 EP_DUR_STORE_PREFIX = "__EPDUR__"
 CLEAN_COVER_PREFIX = "__COVER_CLEAN__"
 
+# Bounded in-memory translation cache; source drama data remains unchanged.
+I18N_CACHE = OrderedDict()
+I18N_CACHE_LOCK = threading.Lock()
+I18N_CACHE_MAX = 5000
+I18N_TRANSLATE_RE = re.compile(r"[\\u1780-\\u17FF]")
+
+
 REQ_LIMIT_KEY = "__REQ_LIMIT__"
 USER_START_KEY = "__USER_START__"
 CFG_ADMIN_GROUP_KEY = "__CFG__ADMIN_GROUP_ID"
@@ -3717,6 +3724,68 @@ async def write_user_language_api(request: Request):
     if not set_user_language(user_id, code):
         raise HTTPException(status_code=500, detail="Could not save language")
     return {"status": "ok", "language": code}
+
+
+def _translate_public_text(text: str, target_language: str) -> str:
+    source = str(text or "").strip()
+    if not source or len(source) > 500 or not I18N_TRANSLATE_RE.search(source):
+        return source
+    cache_key = (target_language, source)
+    with I18N_CACHE_LOCK:
+        cached = I18N_CACHE.get(cache_key)
+        if cached is not None:
+            I18N_CACHE.move_to_end(cache_key)
+            return cached
+    try:
+        response = requests.get(
+            "https://translate.googleapis.com/translate_a/single",
+            params={"client": "gtx", "sl": "auto", "tl": target_language, "dt": "t", "q": source},
+            timeout=(3, 5),
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        translated = "".join(
+            str(part[0]) for part in (payload[0] or [])
+            if isinstance(part, list) and part and part[0]
+        ).strip()
+        if not translated:
+            translated = source
+    except Exception:
+        log.warning("Public translation failed for target %s", target_language)
+        translated = source
+    with I18N_CACHE_LOCK:
+        I18N_CACHE[cache_key] = translated
+        I18N_CACHE.move_to_end(cache_key)
+        while len(I18N_CACHE) > I18N_CACHE_MAX:
+            I18N_CACHE.popitem(last=False)
+    return translated
+
+
+@app.post("/api/translate")
+async def translate_user_visible_text(request: Request):
+    user_id = require_authenticated_telegram_user(request)
+    saved_language = get_user_language(user_id)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    target = str((payload or {}).get("language") or saved_language)
+    if target not in ("en", "zh-CN"):
+        if target == "km":
+            return {"language": "km", "translations": []}
+        raise HTTPException(status_code=400, detail="Unsupported language")
+    values = (payload or {}).get("texts")
+    if not isinstance(values, list) or len(values) > 30:
+        raise HTTPException(status_code=400, detail="texts must be an array with at most 30 items")
+    clean_values = []
+    for value in values:
+        if not isinstance(value, str) or len(value) > 500:
+            raise HTTPException(status_code=400, detail="Each text must be a string of at most 500 characters")
+        clean_values.append(value)
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        translated = list(pool.map(lambda item: _translate_public_text(item, target), clean_values))
+    return {"language": target, "translations": translated}
 
 
 def require_admin_request(
