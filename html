@@ -2394,11 +2394,35 @@
   const getTranslationApiBase = () => (window.location.origin && window.location.origin.startsWith("http"))
     ? window.location.origin : "https://kmovie-render.onrender.com";
 
+  const dynamicRetryCounts = new WeakMap();
+  const scheduleDynamicTranslation = delay => {
+    if (!dynamicTranslationTimer && pendingDynamicNodes.size) {
+      dynamicTranslationTimer = setTimeout(flushDynamicTranslations, delay);
+    }
+  };
+  const requeueDynamicBatch = batch => {
+    let retryDelay = 500;
+    const delays = [500, 1000, 2000, 4000, 8000];
+    batch.forEach(([node, original]) => {
+      if (!node?.isConnected || originalTextNodes.get(node) !== original) return;
+      if ((node.nodeValue || "").trim() !== original.trim()) return;
+      const attempts = (dynamicRetryCounts.get(node) || 0) + 1;
+      if (attempts > delays.length) {
+        console.warn("Text translation retry limit reached");
+        return;
+      }
+      dynamicRetryCounts.set(node, attempts);
+      pendingDynamicNodes.set(node, original);
+      retryDelay = Math.max(retryDelay, delays[attempts - 1]);
+    });
+    scheduleDynamicTranslation(retryDelay);
+  };
+
   const flushDynamicTranslations = async () => {
     dynamicTranslationTimer = null;
     if (uiLanguage === "km" || !pendingDynamicNodes.size) return;
     if (dynamicTranslationInFlight) {
-      dynamicTranslationTimer = setTimeout(flushDynamicTranslations, 100);
+      scheduleDynamicTranslation(150);
       return;
     }
     dynamicTranslationInFlight = true;
@@ -2410,42 +2434,56 @@
       dynamicTranslationInFlight = false;
       return;
     }
-    const sequence = ++dynamicTranslationSequence;
     try {
       const initData = window.Telegram?.WebApp?.initData || "";
-      if (!initData) return;
-      const response = await fetch(`${getTranslationApiBase()}/api/translate`, {
+      if (!initData) {
+        requeueDynamicBatch(batch);
+        return;
+      }
+      const response = await fetch(getTranslationApiBase() + "/api/translate", {
         method: "POST",
         headers: {"Content-Type":"application/json", "X-Telegram-Init-Data":initData},
         body: JSON.stringify({language:languageAtRequest, texts})
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        requeueDynamicBatch(batch);
+        return;
+      }
       const data = await response.json();
-      if (sequence > dynamicTranslationSequence || uiLanguage !== languageAtRequest || data.language !== languageAtRequest) return;
+      if (uiLanguage !== languageAtRequest || data.language !== languageAtRequest) {
+        if (uiLanguage !== "km") requeueDynamicBatch(batch);
+        return;
+      }
       batch.forEach(([node, original], index) => {
         const translated = data.translations?.[index];
-        if (!node.isConnected || typeof translated !== "string" || !translated.trim()) return;
-        if (originalTextNodes.get(node) !== original) return;
-        if (node.nodeValue.trim() !== original.trim()) return;
-        const leading = original.match(/^\\s*/)?.[0] || "";
-        const trailing = original.match(/\\s*$/)?.[0] || "";
+        if (!node.isConnected || originalTextNodes.get(node) !== original) return;
+        if ((node.nodeValue || "").trim() !== original.trim()) return;
+        if (typeof translated !== "string" || !translated.trim() || /[\u1780-\u17FF]/.test(translated)) {
+          requeueDynamicBatch([[node, original]]);
+          return;
+        }
+        const leading = original.match(/^\s*/)?.[0] || "";
+        const trailing = original.match(/\s*$/)?.[0] || "";
         const applied = leading + translated.trim() + trailing;
+        if (applied.trim() === original.trim()) {
+          requeueDynamicBatch([[node, original]]);
+          return;
+        }
+        dynamicRetryCounts.delete(node);
         translatedTextNodes.set(node, applied);
         node.nodeValue = applied;
       });
     } catch (error) {
-      console.warn("Dynamic text translation unavailable", error);
+      console.warn("Dynamic text translation unavailable; retrying", error);
+      requeueDynamicBatch(batch);
     } finally {
       dynamicTranslationInFlight = false;
     }
-    if (pendingDynamicNodes.size && !dynamicTranslationTimer) {
-      dynamicTranslationTimer = setTimeout(flushDynamicTranslations, 80);
-    }
+    scheduleDynamicTranslation(80);
   };
-
   const queueDynamicTranslation = (node, original) => {
     if (!node?.isConnected || !original || !/[\\u1780-\\u17FF]/.test(original)) return;
-    if (original.trim().length < 2 || original.trim().length > 500) return;
+    if (original.trim().length < 2 || original.trim().length > 1500) return;
     if (uiLanguage === "km") return;
     if (node.parentElement?.closest("script,style,svg,code,pre,textarea,input,select,option")) return;
     pendingDynamicNodes.set(node, original);
