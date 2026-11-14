@@ -76,7 +76,7 @@ CLEAN_COVER_PREFIX = "__COVER_CLEAN__"
 I18N_CACHE = OrderedDict()
 I18N_CACHE_LOCK = threading.Lock()
 I18N_CACHE_MAX = 5000
-I18N_TRANSLATE_RE = re.compile(r"[\\u1780-\\u17FF]")
+I18N_TRANSLATE_RE = re.compile(r"[\u1780-\u17FF]")
 
 
 REQ_LIMIT_KEY = "__REQ_LIMIT__"
