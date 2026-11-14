@@ -2038,17 +2038,24 @@ def get_video_controls_keyboard(user_id: int, has_active_drama: bool = True):
 
 
 
-def get_user_language(user_id: int) -> str:
-    """Read a user's saved bot language. Uses an existing user_history key; no schema change."""
+def get_saved_user_language(user_id: int) -> Optional[str]:
+    """Return the explicit saved language, or None for a first-time user."""
     try:
         result = (supabase.table("user_history").select("last_ep")
                   .eq("user_id", int(user_id)).eq("drama_title", USER_LANGUAGE_KEY)
                   .limit(1).execute())
-        raw = (result.data or [{}])[0].get("last_ep")
-        return {0: "km", 1: "en", 2: "zh-CN"}.get(int(raw or 0), "km")
+        if not result.data:
+            return None
+        raw = result.data[0].get("last_ep")
+        return {0: "km", 1: "en", 2: "zh-CN"}.get(int(raw), "km")
     except Exception:
         log.warning("Could not read saved language for user %s", user_id)
-        return "km"
+        return None
+
+
+def get_user_language(user_id: int) -> str:
+    """Read saved language; Khmer is the fallback for existing callers."""
+    return get_saved_user_language(user_id) or "km"
 
 
 def set_user_language(user_id: int, code: str) -> bool:
@@ -2826,6 +2833,23 @@ def start_or_refresh_bot(message):
     record_user_start(chat_id)
 
     try:
+        # First-time users must choose one of the three languages before seeing the menu.
+        if get_saved_user_language(chat_id) is None:
+            options = InlineKeyboardMarkup(row_width=1)
+            options.add(
+                InlineKeyboardButton("🇰🇭 ខ្មែរ", callback_data="set_user_lang:km"),
+                InlineKeyboardButton("🇬🇧 English", callback_data="set_user_lang:en"),
+                InlineKeyboardButton("🇨🇳 简体中文", callback_data="set_user_lang:zh-CN"),
+            )
+            picker_msg = bot.send_message(
+                chat_id,
+                "🌐 សូមជ្រើសរើសភាសា / Please choose your language / 请选择语言：",
+                reply_markup=options,
+            )
+            sweep_and_clean_chat(chat_id, up_to_msg_id=msg_id, keep_msg_id=picker_msg.message_id)
+            user_main_menu_id[chat_id] = picker_msg.message_id
+            return
+
         main_msg = bot.send_message(
             chat_id,
             bot_text(chat_id, "សូមជ្រើសរើសម៉ឺនុយខាងក្រោម", "Please choose a menu option below", "请选择下方菜单"),
@@ -3668,6 +3692,27 @@ def get_verified_telegram_user_id(request: Request) -> Optional[int]:
     except Exception:
         log.exception("Telegram initData verification failed")
         return None
+
+
+@app.get("/api/user-language")
+def read_user_language_api(request: Request):
+    user_id = require_authenticated_telegram_user(request)
+    return {"language": get_user_language(user_id), "has_selection": get_saved_user_language(user_id) is not None}
+
+
+@app.post("/api/user-language")
+async def write_user_language_api(request: Request):
+    user_id = require_authenticated_telegram_user(request)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    code = str((payload or {}).get("language") or "")
+    if code not in ("km", "en", "zh-CN"):
+        raise HTTPException(status_code=400, detail="Unsupported language")
+    if not set_user_language(user_id, code):
+        raise HTTPException(status_code=500, detail="Could not save language")
+    return {"status": "ok", "language": code}
 
 
 def require_admin_request(
