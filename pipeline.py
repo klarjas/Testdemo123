@@ -414,7 +414,7 @@ async def render_dubbed_video(
         "-i", str(voice_path),
         "-filter_complex",
         "[0:a:0]volume=0.20[background];"
-        "[background][1:a:0]amix=inputs=2:duration=first:"
+        "[background][1:a:0]amix=inputs=2:duration=longest:"
         "dropout_transition=0:normalize=0[mixed]",
         "-map", "0:v:0",
         "-map", "[mixed]",
