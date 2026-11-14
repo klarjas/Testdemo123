@@ -5,3 +5,4 @@ fastapi==0.162.7
 uvicorn[standard]==0.54.0
 pydub==0.25.1
 python-dotenv==1.2.1
+audioop-lts==0.2.2; python_version >= "3.13"
